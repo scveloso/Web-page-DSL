@@ -36,10 +36,14 @@
 ;; parse : listof sexp -> listof exp
 ;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
 ;; generates the corresponding expressions.
-(define (parse sexp)
-  (match sexp
-    [(regexp #rx"Create paragraph .*") (create-paragraph (extract-text-from-create-paragraph-call sexp))]
-    [_ (error 'parse "unable to parse ~a" sexp)]))
+(define (parse lof-sexp)
+  (local ([define (helper sexp exp-acc)
+            (match sexp
+              [(regexp #rx"Create paragraph .*") (cons
+                                                 (create-paragraph (extract-text-from-create-paragraph-call sexp))
+                                                 exp-acc)]
+              [_ (error 'parse "unable to parse ~a" sexp)])])
+    (foldl helper empty lof-sexp)))
 
 ;; parse : sexp -> listof styling
 ;; Consumes an s-expression of the styling (in our concrete "surface" syntax) and
@@ -84,5 +88,6 @@
 (test (extract-style create-paragraph-test) "color red, font comic sans, size 12")
 
 ;; Parse tests
-(test (parse create-paragraph-test) (create-paragraph "Lorem ipsum. "))
+(test (parse (list create-paragraph-test)) (list (create-paragraph "Lorem ipsum. ")))
+(test (parse (list create-paragraph-test create-paragraph-test)) (list (create-paragraph "Lorem ipsum. ") (create-paragraph "Lorem ipsum. ")))
 (test (parse-style "color red, font comic sans, size 12") (cons (cons (cons '() (styling-color "red")) (styling-font "comic sans")) (styling-size "12")))

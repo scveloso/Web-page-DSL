@@ -9,17 +9,22 @@
 ;; extract-text-from-create-paragraph-call : string -> string
 ;; Returns only the text in a create paragraph statement
 (define (extract-text-from-create-paragraph-call call)
-  (rest (rest (string-split call " "))))
+  (second (string-split call "\"")))
 
-;; build-string-w-spaces : string string -> string
-;; Adds the first given string to the second given string with a space in between
-(define (build-string-w-spaces s acc)
-  (string-append acc (string-append " " s)))
+;; extract-style : string -> string
+;; Returns only the style text in a create paragraph statement
+(define (extract-style exp)
+  (second (string-split exp "\" ")))
+
+;; Helper tests
+(define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red font comic sans size 12")
+(test (extract-text-from-create-paragraph-call create-paragraph-test) "Lorem ipsum. ")
+(test (extract-style create-paragraph-test) "color red font comic sans size 12")
 
 ;; parse : any -> exp
 (define (parse exp)
   (match exp
-    [(regexp #rx"Create paragraph .*") (create-paragraph (foldl build-string-w-spaces "" (extract-text-from-create-paragraph-call exp)))]
+    [(regexp #rx"Create paragraph .*") (create-paragraph (extract-text-from-create-paragraph-call exp))]
     [_ (error 'parse "unable to parse ~a" exp)]))
 
 ;; interp : exp -> string

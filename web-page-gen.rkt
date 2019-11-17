@@ -6,7 +6,7 @@
 ;; The language our interpreter operates in, comprised
 ;; of a HTML element and the styling to be applied to the element
 (define-type expression
-  [expr (elt element?) (style styling?)])
+  [expr (elt element?) (style (λ (x) (andmap styling? x)))])
 
 ;; An HTML element
 (define-type element
@@ -37,26 +37,27 @@
 ;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
 ;; generates the corresponding expressions.
 (define (parse lof-sexp)
-  (local ([define (helper sexp exp-acc)
+  (local ([define (helper sexp)
             (match sexp
-              [(regexp #rx"Create paragraph .*") (cons
-                                                 (create-paragraph (extract-text-from-create-paragraph-call sexp))
-                                                 exp-acc)]
+              [(regexp #rx"Create paragraph .*") (expr
+                                                  (create-paragraph (extract-text-from-create-paragraph-call sexp))
+                                                  (parse-style (extract-style sexp)))]
               [_ (error 'parse "unable to parse ~a" sexp)])])
-    (foldl helper empty lof-sexp)))
+    (map helper lof-sexp)))
 
 ;; parse : sexp -> listof styling
 ;; Consumes an s-expression of the styling (in our concrete "surface" syntax) and
 ;; generates the corresponding list of style expressions.
+;; (e.g. "color red font comic sans" -> (list (styling-color "red") (styling-font "comic sans"))
 (define (parse-style style-sexp)
   (local ([define styles-list (string-split style-sexp ", ")]
-          [define (helper style-str style-acc)
+          [define (helper style-str)
              (match style-str
-               [(regexp #rx"color .*") (cons style-acc (styling-color (extract-style-item style-str)))]
-               [(regexp #rx"font .*") (cons style-acc (styling-font (extract-style-item style-str)))]
-               [(regexp #rx"size .*") (cons style-acc (styling-size (extract-style-item style-str)))]
+               [(regexp #rx"color .*") (styling-color (extract-style-item style-str))]
+               [(regexp #rx"font .*") (styling-font (extract-style-item style-str))]
+               [(regexp #rx"size .*") (styling-size (extract-style-item style-str))]
                [_ (error 'parse "unable to parse ~a" style-str)])])
-    (foldl helper empty styles-list)))
+    (map helper styles-list)))
 
 ;; interp : expression -> string
 ;; consumes an exp and returns a HTML component in a string
@@ -88,6 +89,13 @@
 (test (extract-style create-paragraph-test) "color red, font comic sans, size 12")
 
 ;; Parse tests
-(test (parse (list create-paragraph-test)) (list (create-paragraph "Lorem ipsum. ")))
-(test (parse (list create-paragraph-test create-paragraph-test)) (list (create-paragraph "Lorem ipsum. ") (create-paragraph "Lorem ipsum. ")))
-(test (parse-style "color red, font comic sans, size 12") (cons (cons (cons '() (styling-color "red")) (styling-font "comic sans")) (styling-size "12")))
+(test (parse (list create-paragraph-test)) (list (expr
+                                                  (create-paragraph "Lorem ipsum. ")
+                                                  (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+(test (parse (list create-paragraph-test create-paragraph-test)) (list (expr
+                                                                        (create-paragraph "Lorem ipsum. ")
+                                                                        (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
+                                                                       (expr
+                                                                        (create-paragraph "Lorem ipsum. ")
+                                                                        (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+(test (parse-style "color red, font comic sans, size 12") (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))

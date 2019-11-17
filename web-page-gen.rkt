@@ -3,9 +3,16 @@
 (require "file-writer.rkt")
 (require "file-reader.rkt")
 
-(define-type exp
+;; The language our interpreter operates in, comprised
+;; of a HTML element and the styling to be applied to the element
+(define-type expression
+  [expr (elt element?) (style styling?)])
+
+;; An HTML element
+(define-type element
   [create-paragraph (t string?)])
 
+;; The styling to be assigned to an HTML element
 (define-type styling
   [styling-color (c string?)]
   [styling-font (f string?)]
@@ -18,27 +25,27 @@
 
 ;; extract-style : string -> string
 ;; Returns only the style text in a create paragraph statement
-(define (extract-style exp)
-  (second (string-split exp "\" ")))
+(define (extract-style sexp)
+  (second (string-split sexp "\" ")))
 
 ;; extract-style-item : string -> string
 ;; Returns the actual styling in a style string (e.g. font comic sans -> comic sans)
 (define (extract-style-item style-str)
   (string-join (map (λ (s) s) (rest (string-split style-str " "))) " "))
 
-;; parse : any -> exp
-;; Consumes an s-expression (in our concrete "surface" syntax) and
-;; generates the corresponding expression.
-(define (parse exp)
-  (match exp
-    [(regexp #rx"Create paragraph .*") (create-paragraph (extract-text-from-create-paragraph-call exp))]
-    [_ (error 'parse "unable to parse ~a" exp)]))
+;; parse : listof sexp -> listof exp
+;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
+;; generates the corresponding expressions.
+(define (parse sexp)
+  (match sexp
+    [(regexp #rx"Create paragraph .*") (create-paragraph (extract-text-from-create-paragraph-call sexp))]
+    [_ (error 'parse "unable to parse ~a" sexp)]))
 
-;; parse : any -> listof styling
+;; parse : sexp -> listof styling
 ;; Consumes an s-expression of the styling (in our concrete "surface" syntax) and
 ;; generates the corresponding list of style expressions.
-(define (parse-style style-string)
-  (local ([define styles-list (string-split style-string ", ")]
+(define (parse-style style-sexp)
+  (local ([define styles-list (string-split style-sexp ", ")]
           [define (helper style-str style-acc)
              (match style-str
                [(regexp #rx"color .*") (cons style-acc (styling-color (extract-style-item style-str)))]
@@ -47,14 +54,11 @@
                [_ (error 'parse "unable to parse ~a" style-str)])])
     (foldl helper empty styles-list)))
 
-;; interp : exp -> string
+;; interp : expression -> string
 ;; consumes an exp and returns a HTML component in a string
 (define (interp the-exp)
-  ; We're consuming an AE, which leads directly to a natural template
-  ; and at least some of our tests.
-  (type-case exp the-exp
-    [create-paragraph (s) (string-append "<p>" (string-append s "</p>"))])
-  )
+  (type-case element (expr-elt the-exp)
+    [create-paragraph (s) (string-append "<p>" (string-append s "</p>"))]))
 
 ;; interpret-user-input () -> string
 ;; Produces the HTML to be generated from the user input

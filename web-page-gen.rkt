@@ -4,15 +4,17 @@
 (require "file-reader.rkt")
 
 ;; The language our interpreter operates in, comprised
-;; of a HTML element and the styling to be applied to the element
+;; of a HTML element and the list of styles to be applied to the element
 (define-type expression
   [expr (elt element?) (style (λ (x) (andmap styling? x)))])
 
 ;; An HTML element
+;; TODO: More features
 (define-type element
   [create-paragraph (t string?)])
 
 ;; The styling to be assigned to an HTML element
+;; TODO: More styles
 (define-type styling
   [styling-color (c string?)]
   [styling-font (f string?)]
@@ -37,13 +39,19 @@
 ;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
 ;; generates the corresponding expressions.
 (define (parse lof-sexp)
-  (local ([define (helper sexp)
-            (match sexp
-              [(regexp #rx"Create paragraph .*") (expr
-                                                  (create-paragraph (extract-text-from-create-paragraph-call sexp))
-                                                  (parse-style (extract-style sexp)))]
-              [_ (error 'parse "unable to parse ~a" sexp)])])
-    (map helper lof-sexp)))
+  (map (λ (sexp)
+         (expr
+          (parse-element sexp)
+          (parse-style (extract-style sexp))))
+       lof-sexp))
+
+;; parse : sexp -> element
+;; Consumes an s-expression (in our concrete "surface" syntax) and
+;; generates a HTML element
+(define (parse-element elt-sexp)
+  (match elt-sexp
+    [(regexp #rx"Create paragraph .*") (create-paragraph (extract-text-from-create-paragraph-call elt-sexp))]
+    [_ (error 'parse "unable to parse ~a" elt-sexp)]))
 
 ;; parse : sexp -> listof styling
 ;; Consumes an s-expression of the styling (in our concrete "surface" syntax) and
@@ -98,4 +106,6 @@
                                                                        (expr
                                                                         (create-paragraph "Lorem ipsum. ")
                                                                         (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+
+(test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
 (test (parse-style "color red, font comic sans, size 12") (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))

@@ -3,10 +3,10 @@
 (require "file-writer.rkt")
 (require "file-reader.rkt")
 
-;; The language our interpreter operates in, comprised
-;; of a HTML element and the list of styles to be applied to the element
+;; The language our interpreter operates in, comprised of a unique id,
+;; an HTML element and the list of styles to be applied to the element
 (define-type expression
-  [expr (elt element?) (style (λ (x) (andmap styling? x)))])
+  [expr (id symbol?) (elt element?) (style (λ (x) (andmap styling? x)))])
 
 ;; An HTML element
 ;; TODO: More features
@@ -41,6 +41,7 @@
 (define (parse lof-sexp)
   (map (λ (sexp)
          (expr
+          (gensym)
           (parse-element sexp)
           (parse-style (extract-style sexp))))
        lof-sexp))
@@ -102,15 +103,20 @@
 (test (extract-style-item "font comic sans") "comic sans")
 
 ;; Parse tests
-(test (parse (list create-paragraph-test)) (list (expr
-                                                  (create-paragraph "Lorem ipsum. ")
-                                                  (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
-(test (parse (list create-paragraph-test create-paragraph-test)) (list (expr
-                                                                        (create-paragraph "Lorem ipsum. ")
-                                                                        (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
-                                                                       (expr
-                                                                        (create-paragraph "Lorem ipsum. ")
-                                                                        (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+
+;; Parse one expression
+(let ([exprs (parse (list create-paragraph-test))])
+  (begin
+    (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
+    (test (expr-style (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+
+;; Parse two expressions
+(let ([exprs (parse (list create-paragraph-test create-paragraph-test))])
+  (begin
+    (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
+    (test (expr-elt (second exprs)) (create-paragraph "Lorem ipsum. "))
+    (test (expr-style (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
+    (test (expr-style (second exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
 
 (test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
 (test (parse-style "color red, font comic sans, size 12") (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))

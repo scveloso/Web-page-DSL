@@ -68,14 +68,14 @@
                [_ (error 'parse "unable to parse ~a" style-str)])])
     (map helper styles-list)))
 
-;; interp : listof expression -> string
-;; consumes an exp and returns a HTML component in a string
-;; TODO: For every expression we have, generate a random id and use that id in the HTML element to be
-;; generated and added, as well as the CSS element
+;; interp : listof expression -> listof string
+;; consumes an exp and returns a list of HTML components in a strings to be written inside the HTML body
 ;; TODO: Add writing a CSS file with the CSS elements
-(define (interp the-exp)
-  (type-case element (expr-elt the-exp)
-    [create-paragraph (s) (string-append "<p>" (string-append s "</p>"))]))
+(define (interp the-exprs)
+  (local ([define (helper the-exp)
+            (type-case element (expr-elt the-exp)
+              [create-paragraph (s) (string-append "<p id=\"" (string-append (symbol->string (expr-id the-exp)) (string-append "\">" (string-append s "</p>"))))])])
+    (map helper the-exprs)))
 
 ;; interpret-user-input () -> string
 ;; Produces the HTML to be generated from the user input
@@ -88,7 +88,7 @@
 (define (run)
   (close-output-port
    (write-end-html-to-output-file
-    (write-body-to-output-file
+    (write-html-strings-to-output-file
      (interpret-user-input)
      (write-start-html-to-output-file
       (create-html-file))))))

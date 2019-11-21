@@ -6,7 +6,7 @@
 ;; The language our interpreter operates in, comprised of a unique id,
 ;; an HTML element and the list of styles to be applied to the element
 (define-type expression
-  [expr (id symbol?) (elt element?) (style (λ (x) (andmap styling? x)))])
+  [expr (id symbol?) (elt element?) (styles (λ (x) (andmap styling? x)))])
 
 ;; An HTML element
 ;; TODO: More features
@@ -19,6 +19,11 @@
   [styling-color (c string?)]
   [styling-font (f string?)]
   [styling-size (s string?)]) ;; TODO: add support for different spacing units
+
+;; A result object encapsulating what to print out to the .html and .css
+;; files for each Webpage DSL element
+(define-type exp-result
+  [result (html-str string?) (css-strs (λ (x) (andmap string? x)))])
 
 ;; extract-text-from-create-paragraph-call : string -> string
 ;; Returns only the text in a create paragraph statement
@@ -68,13 +73,44 @@
                [_ (error 'parse "unable to parse ~a" style-str)])])
     (map helper styles-list)))
 
-;; interp : listof expression -> listof string
-;; consumes an exp and returns a list of HTML components in a strings to be written inside the HTML body
-;; TODO: Add writing a CSS file with the CSS elements
+;; interp : listof expression -> listof exp-result
+;; consumes an exp and returns a list of exp-result, HTML and CSS elements in strings to be written
+;; inside the output HTML and CSS files
 (define (interp the-exprs)
-  (local ([define (helper the-exp)
-            (type-case element (expr-elt the-exp)
-              [create-paragraph (s) (string-append "<p id=\"" (string-append (symbol->string (expr-id the-exp)) (string-append "\">" (string-append s "</p>"))))])])
+  (local (;; interp but for producing HTML elements to place in the .html file
+          [define (interp-elt elt the-exp-id)
+            (type-case element elt
+              [create-paragraph (s) (string-append "<p id=\"" (string-append (symbol->string the-exp-id) (string-append "\">" (string-append s "</p>"))))])]
+
+          [define (interp-styles styles the-exp-id)
+            (append (list (string-append "#" (string-append (symbol->string the-exp-id) " { \n")))
+                         (map (λ (style-exp) (interp-style style-exp)) styles)
+                         (list (string-append "}\n")))]
+
+          [define (interp-style style)
+            (type-case styling style
+              [styling-color (c) (string-append "\tcolor: " (string-append c " \n"))]
+              [styling-font (f) (string-append "\tfont: " (string-append f " \n"))]
+              [styling-size (s) (string-append "\tsize: " (string-append s "px \n"))])]
+            
+
+      ;    ;; interp but for producing CSS elements to place in the .css file
+       ;   [define (interp-style styles the-exp-id css-str-acc)
+        ;    (if (empty? styles)
+         ;       (string-append css-str-acc "} \n")
+          ;      (local ([define css-string (string-copy css-str-acc)])
+           ;       (begin
+            ;        css-string
+             ;       (set! css-string (string-append "#" (string-append (symbol->string the-exp-id) " { \n"))) ;; start of the style entry
+              ;      (type-case styling (first styles)
+               ;       [styling-color (c) (set! css-string (string-append css-string (string-append "color: " (string-append c " \n"))))]
+                ;      [styling-font (f) (set! css-string (string-append css-string (string-append "font: " (string-append f " \n"))))]
+                 ;     [styling-size (s) (set! css-string (string-append css-string (string-append "size: " (string-append s "px \n"))))])
+                  ;  (interp-style (rest styles) the-exp-id (string-copy css-string)))))]
+
+          [define (helper the-exp)
+            (local ([define the-exp-id (expr-id the-exp)])
+              (result (interp-elt (expr-elt the-exp) the-exp-id) (interp-styles (expr-styles the-exp) the-exp-id)))])
     (map helper the-exprs)))
 
 ;; interpret-user-input () -> string
@@ -86,12 +122,18 @@
 ;; Processes the user input in sample.txt by parsing and interpreting it and generating an
 ;; HTML component. Then, creates sample.html, a file containing the generated HTML
 (define (run)
-  (close-output-port
-   (write-end-html-to-output-file
-    (write-html-strings-to-output-file
-     (interpret-user-input)
-     (write-start-html-to-output-file
-      (create-html-file))))))
+  (local ([define results (interpret-user-input)]
+          [define html-results (map (λ (result) (result-html-str result)) results)]
+          [define css-results (map (λ (result) (result-css-strs result)) results)])
+    (begin
+      (close-output-port
+       (write-end-html-to-output-file
+        (write-strings-to-output-file
+         html-results
+         (write-start-html-to-output-file
+          (create-html-file)))))
+      (close-output-port
+       (foldl (λ (los acc) (write-strings-to-output-file los acc)) (create-css-file) css-results)))))
 
 ;; *** TESTS ***
 (define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font comic sans, size 12")
@@ -108,15 +150,15 @@
 (let ([exprs (parse (list create-paragraph-test))])
   (begin
     (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
-    (test (expr-style (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
 
 ;; Parse two expressions
 (let ([exprs (parse (list create-paragraph-test create-paragraph-test))])
   (begin
     (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
     (test (expr-elt (second exprs)) (create-paragraph "Lorem ipsum. "))
-    (test (expr-style (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
-    (test (expr-style (second exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
+    (test (expr-styles (second exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
 
 (test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
 (test (parse-style "color red, font comic sans, size 12") (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))

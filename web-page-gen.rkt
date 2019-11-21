@@ -77,36 +77,26 @@
 ;; consumes an exp and returns a list of exp-result, HTML and CSS elements in strings to be written
 ;; inside the output HTML and CSS files
 (define (interp the-exprs)
-  (local (;; interp but for producing HTML elements to place in the .html file
+  (local (;; interp-elt : listof element -> listof string
+          ;; consumes an element expression and returns the appropriate html string to print to a .html file
           [define (interp-elt elt the-exp-id)
             (type-case element elt
               [create-paragraph (s) (string-append "<p id=\"" (string-append (symbol->string the-exp-id) (string-append "\">" (string-append s "</p>"))))])]
 
+          ;; interp-styles : listof styling -> listof string
+          ;; consumes a list of style expressions and returns an appropriate list of css strings to print to a .css file
           [define (interp-styles styles the-exp-id)
-            (append (list (string-append "#" (string-append (symbol->string the-exp-id) " { \n")))
+            (append (list (string-append "#" (string-append (symbol->string the-exp-id) " {")))
                          (map (λ (style-exp) (interp-style style-exp)) styles)
                          (list (string-append "}\n")))]
 
+          ;; interp-style : styling -> string
+          ;; consumes a style expression and returns the appropriate css string to print to a .css file
           [define (interp-style style)
             (type-case styling style
-              [styling-color (c) (string-append "\tcolor: " (string-append c " \n"))]
-              [styling-font (f) (string-append "\tfont: " (string-append f " \n"))]
-              [styling-size (s) (string-append "\tsize: " (string-append s "px \n"))])]
-            
-
-      ;    ;; interp but for producing CSS elements to place in the .css file
-       ;   [define (interp-style styles the-exp-id css-str-acc)
-        ;    (if (empty? styles)
-         ;       (string-append css-str-acc "} \n")
-          ;      (local ([define css-string (string-copy css-str-acc)])
-           ;       (begin
-            ;        css-string
-             ;       (set! css-string (string-append "#" (string-append (symbol->string the-exp-id) " { \n"))) ;; start of the style entry
-              ;      (type-case styling (first styles)
-               ;       [styling-color (c) (set! css-string (string-append css-string (string-append "color: " (string-append c " \n"))))]
-                ;      [styling-font (f) (set! css-string (string-append css-string (string-append "font: " (string-append f " \n"))))]
-                 ;     [styling-size (s) (set! css-string (string-append css-string (string-append "size: " (string-append s "px \n"))))])
-                  ;  (interp-style (rest styles) the-exp-id (string-copy css-string)))))]
+              [styling-color (c) (string-append "\tcolor: " (string-append c ";"))]
+              [styling-font (f) (string-append "\tfont-family: \"" (string-append f "\";"))]
+              [styling-size (s) (string-append "\tfont-size: " (string-append s "px;"))])]
 
           [define (helper the-exp)
             (local ([define the-exp-id (expr-id the-exp)])

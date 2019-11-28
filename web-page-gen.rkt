@@ -147,7 +147,6 @@
 (define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font Comic Sans MS, size 12")
 (define create-heading-test "Create heading level 2 \"Heading text \" color blue, font Times New Roman, size 14")
 
-
 ;; Helper tests
 (test (extract-text-from-create-statement create-paragraph-test) "Lorem ipsum. ")
 (test (extract-text-from-create-statement create-heading-test) "Heading text ")
@@ -157,7 +156,6 @@
 (test (extract-style-item "font comic sans") "comic sans")
 
 ;; Parse tests
-
 ;; Parse one expression
 (let ([exprs (parse (list create-paragraph-test))])
   (begin
@@ -172,5 +170,13 @@
     (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))
     (test (expr-styles (second exprs)) (list (styling-color "blue") (styling-font "Times New Roman") (styling-size "14")))))
 
+;; Parse helper tests
 (test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
 (test (parse-style "color red, font Comic Sans MS, size 12") (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))
+
+;; Interp tests
+;; Need to use test/pred and lambdas here since interp results have variable ids 
+(let ([exprs (interp (parse (list create-paragraph-test create-heading-test)))])
+  (begin
+    (test/pred (result-html-str (first exprs)) (λ (result-exp) (regexp-match #rx"<p id=\"g[0-9]*\">Lorem ipsum. </p>" result-exp)))
+    (test/pred (result-html-str (second exprs)) (λ (result-exp) (regexp-match #rx"<h2 id=\"g[0-9]*\">Heading text </h2>" result-exp)))))

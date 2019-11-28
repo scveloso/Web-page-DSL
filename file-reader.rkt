@@ -12,7 +12,7 @@
   (local [(define (helper input-file line-acc)
            (let ((line (read-line input-file 'any)))
              (if (eof-object? line)
-                 line-acc
+                 (reverse line-acc)
                  (helper input-file (cons line line-acc)))))]
     (helper input-file empty)))
 

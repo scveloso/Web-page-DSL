@@ -1,2 +1,2 @@
+Create heading level 1 "Lorem ipsum. " size 14, color black, font Times New Roman
 Create paragraph "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. " font Comic Sans MS, size 12, color blue
-Create paragraph "Second Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. " size 12, color black, font Times New Roman

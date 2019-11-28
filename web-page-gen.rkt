@@ -11,7 +11,8 @@
 ;; An HTML element
 ;; TODO: More features
 (define-type element
-  [create-paragraph (t string?)])
+  [create-paragraph (t string?)]
+  [create-heading (t string?) (l string?)])
 
 ;; The styling to be assigned to an HTML element
 ;; TODO: More styles
@@ -25,10 +26,16 @@
 (define-type exp-result
   [result (html-str string?) (css-strs (λ (x) (andmap string? x)))])
 
-;; extract-text-from-create-paragraph-call : string -> string
-;; Returns only the text in a create paragraph statement
-(define (extract-text-from-create-paragraph-call call)
-  (second (string-split call "\"")))
+;; extract-text-from-create-statement : string -> string
+;; Returns only the text in a create statement
+(define (extract-text-from-create-statement stmt)
+  (second (string-split stmt "\"")))
+
+;; extract-text-from-create-statement : string -> number
+;; Returns only the level of the create heading statement
+;; e.g. Create heading level 2 "sample text" -> 2
+(define (extract-heading-level-from-create-statement stmt)
+  (fourth (string-split stmt " ")))
 
 ;; extract-style : string -> string
 ;; Returns only the style text in a create paragraph statement
@@ -56,7 +63,8 @@
 ;; generates a HTML element
 (define (parse-element elt-sexp)
   (match elt-sexp
-    [(regexp #rx"Create paragraph .*") (create-paragraph (extract-text-from-create-paragraph-call elt-sexp))]
+    [(regexp #rx"^Create paragraph .*$") (create-paragraph (extract-text-from-create-statement elt-sexp))]
+    [(regexp #rx"^Create heading level [1-6] .*$") (create-heading (extract-text-from-create-statement elt-sexp) (extract-heading-level-from-create-statement elt-sexp))]
     [_ (error 'parse "unable to parse ~a" elt-sexp)]))
 
 ;; parse : sexp -> listof styling
@@ -81,7 +89,17 @@
           ;; consumes an element expression and returns the appropriate html string to print to a .html file
           [define (interp-elt elt the-exp-id)
             (type-case element elt
-              [create-paragraph (s) (string-append "<p id=\"" (string-append (symbol->string the-exp-id) (string-append "\">" (string-append s "</p>"))))])]
+              [create-paragraph (s) (string-append "<p id=\""
+                                                   (string-append (symbol->string the-exp-id)
+                                                                  (string-append "\">"
+                                                                                 (string-append s "</p>"))))]
+              [create-heading (s l) (string-append "<h"
+                                                   (string-append l
+                                                                  (string-append " id=\""
+                                                                                 (string-append (symbol->string the-exp-id)
+                                                                                                (string-append "\">"
+                                                                                                               (string-append s "</h"
+                                                                                                                              (string-append l ">")))))))])]
 
           ;; interp-styles : listof styling -> listof string
           ;; consumes a list of style expressions and returns an appropriate list of css strings to print to a .css file
@@ -126,11 +144,15 @@
        (foldl (λ (los acc) (write-strings-to-output-file los acc)) (create-css-file) css-results)))))
 
 ;; *** TESTS ***
-(define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font comic sans, size 12")
+(define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font Comic Sans MS, size 12")
+(define create-heading-test "Create heading level 2 \"Heading text \" color blue, font Times New Roman, size 14")
+
 
 ;; Helper tests
-(test (extract-text-from-create-paragraph-call create-paragraph-test) "Lorem ipsum. ")
-(test (extract-style create-paragraph-test) "color red, font comic sans, size 12")
+(test (extract-text-from-create-statement create-paragraph-test) "Lorem ipsum. ")
+(test (extract-text-from-create-statement create-heading-test) "Heading text ")
+(test (extract-heading-level-from-create-statement create-heading-test) "2")
+(test (extract-style create-paragraph-test) "color red, font Comic Sans MS, size 12")
 (test (extract-style-item "color red") "red")
 (test (extract-style-item "font comic sans") "comic sans")
 
@@ -140,15 +162,15 @@
 (let ([exprs (parse (list create-paragraph-test))])
   (begin
     (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
-    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))))
 
 ;; Parse two expressions
-(let ([exprs (parse (list create-paragraph-test create-paragraph-test))])
+(let ([exprs (parse (list create-paragraph-test create-heading-test))])
   (begin
     (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
-    (test (expr-elt (second exprs)) (create-paragraph "Lorem ipsum. "))
-    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
-    (test (expr-styles (second exprs)) (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))))
+    (test (expr-elt (second exprs)) (create-heading "Heading text " "2"))
+    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))
+    (test (expr-styles (second exprs)) (list (styling-color "blue") (styling-font "Times New Roman") (styling-size "14")))))
 
 (test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
-(test (parse-style "color red, font comic sans, size 12") (list (styling-color "red") (styling-font "comic sans") (styling-size "12")))
+(test (parse-style "color red, font Comic Sans MS, size 12") (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))

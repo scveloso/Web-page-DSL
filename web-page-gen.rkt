@@ -102,8 +102,8 @@
 ;; consumes an exp and returns a list of exp-result, HTML and CSS elements in strings to be written
 ;; inside the output HTML and CSS files
 (define (interp the-exprs)
-  (local (;; interp-elt : listof element -> listof string
-          ;; consumes an element expression and returns the appropriate html string to print to a .html file
+  (local (;; interp-elt : element symbol -> string
+          ;; consumes an element expression and its id and returns the appropriate html string to print to a .html file
           [define (interp-elt elt the-exp-id)
             (type-case element elt
               [create-paragraph (s) (string-append "<p id=\""
@@ -125,8 +125,9 @@
               [align-left () "\tfloat: left;\n\twidth: 50%;"]
               [align-right () "\tfloat: right;\n\twidth: 50%;"])]
           
-          ;; interp-styles : listof styling -> listof string
-          ;; consumes a list of style expressions and returns an appropriate list of css strings to print to a .css file
+          ;; interp-styles : listof styling, symbol -> listof string
+          ;; consumes a list of style expressions and the id of the HTML element these styles refer to
+          ;; and returns the corresponding list of css strings to print to a .css file
           [define (interp-styles styles the-exp-id)
             (append (list (string-append "#" (string-append (symbol->string the-exp-id) " {")))
                          (map (λ (style-exp) (interp-style style-exp)) styles)

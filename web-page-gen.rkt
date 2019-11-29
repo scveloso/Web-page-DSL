@@ -15,11 +15,19 @@
   [create-heading (t string?) (l string?)])
 
 ;; The styling to be assigned to an HTML element
+;; For DSL simplicity reasons, only use "pt" as the unit of spacing - everyday user is used to this unit (word, google docs, etc).
 ;; TODO: More styles
 (define-type styling
   [styling-color (c string?)]
   [styling-font (f string?)]
-  [styling-size (s string?)]) ;; TODO: add support for different spacing units
+  [styling-size (s string?)]
+  [styling-alignment (a alignment?)])
+
+;; The alignment for the element
+(define-type alignment
+  [align-center]
+  [align-left]
+  [align-right])
 
 ;; A result object encapsulating what to print out to the .html and .css
 ;; files for each Webpage DSL element
@@ -46,6 +54,14 @@
 ;; Returns the actual styling in a style string (e.g. font comic sans -> comic sans)
 (define (extract-style-item style-str)
   (string-join (map (λ (s) s) (rest (string-split style-str " "))) " "))
+
+;; extract-alignment : string -> alignment
+;; Returns the alignment type in the given style string (e.g. alignment center -> (align-center)
+(define (extract-alignment style-str)
+  (match (extract-style-item style-str)
+    ["center" (align-center)]
+    ["right" (align-right)]
+    ["left" (align-left)]))
 
 ;; parse : listof sexp -> listof expression
 ;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
@@ -78,6 +94,7 @@
                [(regexp #rx"color .*") (styling-color (extract-style-item style-str))]
                [(regexp #rx"font .*") (styling-font (extract-style-item style-str))]
                [(regexp #rx"size .*") (styling-size (extract-style-item style-str))]
+               [(regexp #rx"align .*") (styling-alignment (extract-alignment style-str))]
                [_ (error 'parse "unable to parse ~a" style-str)])])
     (map helper styles-list)))
 
@@ -100,7 +117,14 @@
                                                                                                 (string-append "\">"
                                                                                                                (string-append s "</h"
                                                                                                                               (string-append l ">")))))))])]
-
+          ;; interp-alignment : alignment -> string
+          ;; consumes an alignment and returns the css string to print to a .css file
+          [define (interp-alignment almt)
+            (type-case alignment almt
+              [align-center () "\tmargin: auto;\n\twidth: 50%;"]
+              [align-left () "\tfloat: left;\n\twidth: 50%;"]
+              [align-right () "\tfloat: right;\n\twidth: 50%;"])]
+          
           ;; interp-styles : listof styling -> listof string
           ;; consumes a list of style expressions and returns an appropriate list of css strings to print to a .css file
           [define (interp-styles styles the-exp-id)
@@ -114,7 +138,8 @@
             (type-case styling style
               [styling-color (c) (string-append "\tcolor: " (string-append c ";"))]
               [styling-font (f) (string-append "\tfont-family: \"" (string-append f "\";"))]
-              [styling-size (s) (string-append "\tfont-size: " (string-append s "px;"))])]
+              [styling-size (s) (string-append "\tfont-size: " (string-append s "pt;"))]
+              [styling-alignment (a) (interp-alignment a)])]
 
           [define (helper the-exp)
             (local ([define the-exp-id (expr-id the-exp)])
@@ -144,31 +169,37 @@
        (foldl (λ (los acc) (write-strings-to-output-file los acc)) (create-css-file) css-results)))))
 
 ;; *** TESTS ***
-(define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font Comic Sans MS, size 12")
-(define create-heading-test "Create heading level 2 \"Heading text \" color blue, font Times New Roman, size 14")
+(define (css-l-to-s css-l)
+  (foldl (λ (s acc) (string-append acc s)) "" css-l))
+
+(define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font Comic Sans MS, size 12, align center")
+(define create-heading-test "Create heading level 2 \"Heading text \" color blue, font Times New Roman, size 14, align right")
 
 ;; Helper tests
 (test (extract-text-from-create-statement create-paragraph-test) "Lorem ipsum. ")
 (test (extract-text-from-create-statement create-heading-test) "Heading text ")
 (test (extract-heading-level-from-create-statement create-heading-test) "2")
-(test (extract-style create-paragraph-test) "color red, font Comic Sans MS, size 12")
+(test (extract-style create-paragraph-test) "color red, font Comic Sans MS, size 12, align center")
 (test (extract-style-item "color red") "red")
 (test (extract-style-item "font comic sans") "comic sans")
+(test (extract-alignment "align center") (align-center))
+(test (extract-alignment "align right") (align-right))
+(test (extract-alignment "align left") (align-left))
 
 ;; Parse tests
 ;; Parse one expression
 (let ([exprs (parse (list create-paragraph-test))])
   (begin
     (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
-    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))))
+    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12") (styling-alignment (align-center))))))
 
 ;; Parse two expressions
 (let ([exprs (parse (list create-paragraph-test create-heading-test))])
   (begin
     (test (expr-elt (first exprs)) (create-paragraph "Lorem ipsum. "))
     (test (expr-elt (second exprs)) (create-heading "Heading text " "2"))
-    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))
-    (test (expr-styles (second exprs)) (list (styling-color "blue") (styling-font "Times New Roman") (styling-size "14")))))
+    (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12") (styling-alignment (align-center))))
+    (test (expr-styles (second exprs)) (list (styling-color "blue") (styling-font "Times New Roman") (styling-size "14") (styling-alignment (align-right))))))
 
 ;; Parse helper tests
 (test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
@@ -179,4 +210,6 @@
 (let ([exprs (interp (parse (list create-paragraph-test create-heading-test)))])
   (begin
     (test/pred (result-html-str (first exprs)) (λ (result-exp) (regexp-match #rx"<p id=\"g[0-9]*\">Lorem ipsum. </p>" result-exp)))
-    (test/pred (result-html-str (second exprs)) (λ (result-exp) (regexp-match #rx"<h2 id=\"g[0-9]*\">Heading text </h2>" result-exp)))))
+    (test/pred (result-css-strs (first exprs)) (λ (result-exp) (regexp-match #rx"#g[0-9]* {\tcolor: red;\tfont-family: \"Comic Sans MS\";\tfont-size: 12pt;\tmargin: auto;\n\twidth: 50%;}\n" (css-l-to-s result-exp))))
+    (test/pred (result-html-str (second exprs)) (λ (result-exp) (regexp-match #rx"<h2 id=\"g[0-9]*\">Heading text </h2>" result-exp)))
+    (test/pred (result-css-strs (second exprs)) (λ (result-exp) (regexp-match #rx"#g[0-9]* {\tcolor: blue;\tfont-family: \"Times New Roman\";\tfont-size: 14pt;\tfloat: right;\n\twidth: 50%;}\n" (css-l-to-s result-exp))))))

@@ -1,12 +1,16 @@
-#g462440 {
-	font-size: 14px;
+#g543035 {
+	font-size: 14pt;
 	color: black;
 	font-family: "Times New Roman";
+	float: left;
+	width: 50%;
 }
 
-#g462441 {
+#g543036 {
 	font-family: "Comic Sans MS";
-	font-size: 12px;
+	font-size: 12pt;
 	color: blue;
+	float: right;
+	width: 50%;
 }
 

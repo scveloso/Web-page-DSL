@@ -1,3 +1,4 @@
 *.rkt~
 /test/*.html
+/test/*.css
 compiled*

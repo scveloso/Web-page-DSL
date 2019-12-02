@@ -1,5 +1,9 @@
 #lang plai
 
+(require megaparsack megaparsack/text)
+(require data/monad)
+(require data/applicative)
+
 (require "file-writer.rkt")
 (require "file-reader.rkt")
 
@@ -66,6 +70,8 @@
 ;; parse : listof sexp -> listof expression
 ;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
 ;; generates the corresponding expressions.
+
+#;
 (define (parse lof-sexp)
   (map (λ (sexp)
          (expr
@@ -73,6 +79,135 @@
           (parse-element sexp)
           (parse-style (extract-style sexp))))
        lof-sexp))
+
+
+;; Currently does not do escaping ... do not use quotes inside text
+(define slwg-text-content/p
+  (do (char/p #\")
+      [text <- (many/p (char-not/p #\"))]
+      (char/p #\")
+      (pure (list->string text))))
+
+(define slwg-styling-ident/p
+  (do [text <- (many/p (char-not-in/p ",\n"))]
+      (pure (list->string text))))
+
+(define slwg-text-styling-color/p
+  (do (or/p (try/p (string/p "color"))
+            (string/p "colour"))
+      (many+/p space/p)
+      [color <- slwg-styling-ident/p]
+      (pure (styling-color color))))
+
+(define slwg-text-styling-font/p
+  (do (string/p "font")
+      (many+/p space/p)
+      [font <- slwg-styling-ident/p]
+      (pure (styling-font font))))
+
+(define slwg-text-styling-size/p
+  (do (string/p "size")
+      (many+/p space/p)
+      [size <- slwg-styling-ident/p]
+      (pure (styling-size size))))
+
+(define slwg-styling-align/p
+  (or/p (do (string/p "center")
+            (pure (align-center)))
+        (do (string/p "left")
+            (pure (align-left)))
+        (do (string/p "right")
+            (pure (align-right)))))
+
+(define slwg-text-styling-align/p
+  (do (or/p (try/p (string/p "aligned"))
+            (string/p "align")
+            (string/p "move")
+            (string/p "to")
+            (string/p "on")
+            (string/p "in"))
+      (many+/p space/p)
+      [align <- slwg-styling-align/p]
+      (pure (styling-alignment align))))
+
+(define slwg-text-styling/p
+  (or/p slwg-text-styling-color/p
+        slwg-text-styling-font/p
+        slwg-text-styling-size/p
+        slwg-text-styling-align/p))
+
+(define slwg-text-styling-sep/p
+  (do (char/p #\,)
+      (many/p space/p)))
+
+(define slwg-text-stylings/p
+  (many/p #:sep slwg-text-styling-sep/p slwg-text-styling/p))
+
+(define slwg-header-level/p
+  integer/p)
+
+(define slwg-header/p
+  (do (or/p (try/p (string-ci/p "header"))
+            (string-ci/p "heading"))
+      (many+/p space/p)
+      (string/p "level")
+      (many+/p space/p)
+      [level <- slwg-header-level/p]
+      (many+/p space/p)
+      [text <- slwg-text-content/p]
+      (pure (create-heading text (number->string level)))))
+
+(define slwg-paragraph/p
+  (do (string-ci/p "paragraph")
+      (many+/p space/p)
+      [text <- slwg-text-content/p]
+      (pure (create-paragraph text))))
+
+(define todo
+  (message (srcloc 0 #f #f #f #f) #f '("TODO")))
+
+(define slwg-list/p
+  (fail/p todo))
+
+(define slwg-image/p
+  (fail/p todo))
+
+(define slwg-background/p
+  (fail/p todo))
+
+(define slwg-constructor/p
+  (or/p (string-ci/p "add")
+        (try/p (string-ci/p "construct"))
+        (string-ci/p "create")
+        (string-ci/p "insert")
+        (string-ci/p "make")))
+
+(define slwg-constructable/p
+  (or/p slwg-header/p
+        slwg-paragraph/p
+        slwg-list/p
+        slwg-image/p))
+
+(define slwg/p
+  (or/p (try/p slwg-background/p)
+        (do slwg-constructor/p
+            (many+/p space/p)
+            [elem <- slwg-constructable/p]
+            (many+/p space/p)
+            [styles <- slwg-text-stylings/p]
+            (pure (expr (gensym) elem styles)))))
+
+#;
+(define slwgs/p
+  (do [prog <- (many/p #:sep space/p slwg/p)]
+      (eof/p)
+      (pure prog)))
+
+
+(define (parse lof-sexp)
+  (map (λ (str) (parse-result! (parse-string slwg/p str))) lof-sexp))
+
+
 
 ;; parse : sexp -> element
 ;; Consumes an s-expression (in our concrete "surface" syntax) and
@@ -177,15 +312,15 @@
 (define create-heading-test "Create heading level 2 \"Heading text \" color blue, font Times New Roman, size 14, align right")
 
 ;; Helper tests
-(test (extract-text-from-create-statement create-paragraph-test) "Lorem ipsum. ")
-(test (extract-text-from-create-statement create-heading-test) "Heading text ")
-(test (extract-heading-level-from-create-statement create-heading-test) "2")
-(test (extract-style create-paragraph-test) "color red, font Comic Sans MS, size 12, align center")
-(test (extract-style-item "color red") "red")
-(test (extract-style-item "font comic sans") "comic sans")
-(test (extract-alignment "align center") (align-center))
-(test (extract-alignment "align right") (align-right))
-(test (extract-alignment "align left") (align-left))
+;(test (extract-text-from-create-statement create-paragraph-test) "Lorem ipsum. ")
+;(test (extract-text-from-create-statement create-heading-test) "Heading text ")
+;(test (extract-heading-level-from-create-statement create-heading-test) "2")
+;(test (extract-style create-paragraph-test) "color red, font Comic Sans MS, size 12, align center")
+;(test (extract-style-item "color red") "red")
+;(test (extract-style-item "font comic sans") "comic sans")
+;(test (extract-alignment "align center") (align-center))
+;(test (extract-alignment "align right") (align-right))
+;(test (extract-alignment "align left") (align-left))
 
 ;; Parse tests
 ;; Parse one expression

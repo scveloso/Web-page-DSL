@@ -13,19 +13,22 @@
   [expr (id symbol?) (elt element?) (styles (λ (x) (andmap styling? x)))])
 
 ;; An HTML element
-;; TODO: More features
 (define-type element
   [create-paragraph (t string?)]
-  [create-heading (t string?) (l string?)])
+  [create-heading (t string?) (l string?)]
+  [create-image (src string?)]
+  [body]) ;; used for background
 
 ;; The styling to be assigned to an HTML element
 ;; For DSL simplicity reasons, only use "pt" as the unit of spacing - everyday user is used to this unit (word, google docs, etc).
-;; TODO: More styles
 (define-type styling
   [styling-color (c string?)]
   [styling-font (f string?)]
   [styling-size (s string?)]
-  [styling-alignment (a alignment?)])
+  [styling-alignment (a alignment?)]
+  [styling-bg-image (img string?)]
+  [styling-bg-color (c string?)]
+  [styling-bg-repeat])
 
 ;; The alignment for the element
 (define-type alignment
@@ -37,49 +40,6 @@
 ;; files for each Webpage DSL element
 (define-type exp-result
   [result (html-str string?) (css-strs (λ (x) (andmap string? x)))])
-
-;; extract-text-from-create-statement : string -> string
-;; Returns only the text in a create statement
-(define (extract-text-from-create-statement stmt)
-  (second (string-split stmt "\"")))
-
-;; extract-text-from-create-statement : string -> number
-;; Returns only the level of the create heading statement
-;; e.g. Create heading level 2 "sample text" -> 2
-(define (extract-heading-level-from-create-statement stmt)
-  (fourth (string-split stmt " ")))
-
-;; extract-style : string -> string
-;; Returns only the style text in a create paragraph statement
-(define (extract-style sexp)
-  (second (string-split sexp "\" ")))
-
-;; extract-style-item : string -> string
-;; Returns the actual styling in a style string (e.g. font comic sans -> comic sans)
-(define (extract-style-item style-str)
-  (string-join (map (λ (s) s) (rest (string-split style-str " "))) " "))
-
-;; extract-alignment : string -> alignment
-;; Returns the alignment type in the given style string (e.g. alignment center -> (align-center)
-(define (extract-alignment style-str)
-  (match (extract-style-item style-str)
-    ["center" (align-center)]
-    ["right" (align-right)]
-    ["left" (align-left)]))
-
-;; parse : listof sexp -> listof expression
-;; Consumes a list of s-expressions (in our concrete "surface" syntax) and
-;; generates the corresponding expressions.
-
-#;
-(define (parse lof-sexp)
-  (map (λ (sexp)
-         (expr
-          (gensym)
-          (parse-element sexp)
-          (parse-style (extract-style sexp))))
-       lof-sexp))
-
 
 ;; Currently does not do escaping ... do not use quotes inside text
 (define slwg-text-content/p
@@ -130,11 +90,30 @@
       [align <- slwg-styling-align/p]
       (pure (styling-alignment align))))
 
+(define slwg-text-styling-bg-img/p
+  (do (string/p "background-image")
+      (many+/p space/p)
+      [image <- slwg-styling-ident/p]
+      (pure (styling-bg-image image))))
+
+(define slwg-text-styling-bg-color/p
+  (do (string/p "background-color")
+      (many+/p space/p)
+      [color <- slwg-styling-ident/p]
+      (pure (styling-bg-color color))))
+
+(define slwg-text-styling-bg-repeat/p
+  (do (string/p "repeat")
+      (pure (styling-bg-repeat))))
+
 (define slwg-text-styling/p
   (or/p slwg-text-styling-color/p
         slwg-text-styling-font/p
         slwg-text-styling-size/p
-        slwg-text-styling-align/p))
+        slwg-text-styling-align/p
+        slwg-text-styling-bg-img/p
+        slwg-text-styling-bg-color/p
+        slwg-text-styling-bg-repeat/p))
 
 (define slwg-text-styling-sep/p
   (do (char/p #\,)
@@ -170,12 +149,27 @@
   (fail/p todo))
 
 (define slwg-image/p
-  (fail/p todo))
+  (do (string-ci/p "image")
+      (many+/p space/p)
+      [img-link <- slwg-text-content/p]
+      (pure (create-image img-link))))
 
 (define slwg-background/p
-  (fail/p todo))
+  (do (string-ci/p "set")
+            (many+/p space/p)
+            (string-ci/p "background")
+            (many+/p space/p)
+            [styles <- slwg-text-stylings/p]
+            (pure (expr 'body (body) styles))))
 
 (define slwg-constructor/p
+  (or/p (string-ci/p "add")
+        (try/p (string-ci/p "construct"))
+        (string-ci/p "create")
+        (string-ci/p "insert")
+        (string-ci/p "make")))
+
+(define slwg-fill-opt/p
   (or/p (string-ci/p "add")
         (try/p (string-ci/p "construct"))
         (string-ci/p "create")
@@ -193,7 +187,7 @@
         (do slwg-constructor/p
             (many+/p space/p)
             [elem <- slwg-constructable/p]
-            (many+/p space/p)
+            (many/p space/p)
             [styles <- slwg-text-stylings/p]
             (pure (expr (gensym) elem styles)))))
 
@@ -203,35 +197,11 @@
       (eof/p)
       (pure prog)))
 
+(define (gen-css-id)
+  (string->symbol (string-append "#" (symbol->string (gensym)))))
 
 (define (parse lof-sexp)
   (map (λ (str) (parse-result! (parse-string slwg/p str))) lof-sexp))
-
-
-
-;; parse : sexp -> element
-;; Consumes an s-expression (in our concrete "surface" syntax) and
-;; generates a HTML element
-(define (parse-element elt-sexp)
-  (match elt-sexp
-    [(regexp #rx"^Create paragraph .*$") (create-paragraph (extract-text-from-create-statement elt-sexp))]
-    [(regexp #rx"^Create heading level [1-6] .*$") (create-heading (extract-text-from-create-statement elt-sexp) (extract-heading-level-from-create-statement elt-sexp))]
-    [_ (error 'parse "unable to parse ~a" elt-sexp)]))
-
-;; parse : sexp -> listof styling
-;; Consumes an s-expression of the styling (in our concrete "surface" syntax) and
-;; generates the corresponding list of style expressions.
-;; (e.g. "color red font comic sans" -> (list (styling-color "red") (styling-font "comic sans"))
-(define (parse-style style-sexp)
-  (local ([define styles-list (string-split style-sexp ", ")]
-          [define (helper style-str)
-             (match style-str
-               [(regexp #rx"color .*") (styling-color (extract-style-item style-str))]
-               [(regexp #rx"font .*") (styling-font (extract-style-item style-str))]
-               [(regexp #rx"size .*") (styling-size (extract-style-item style-str))]
-               [(regexp #rx"align .*") (styling-alignment (extract-alignment style-str))]
-               [_ (error 'parse "unable to parse ~a" style-str)])])
-    (map helper styles-list)))
 
 ;; interp : listof expression -> listof exp-result
 ;; consumes an exp and returns a list of exp-result, HTML and CSS elements in strings to be written
@@ -251,7 +221,13 @@
                                                                                  (string-append (symbol->string the-exp-id)
                                                                                                 (string-append "\">"
                                                                                                                (string-append s "</h"
-                                                                                                                              (string-append l ">")))))))])]
+                                                                                                                              (string-append l ">")))))))]
+              [create-image (src) (string-append "<img src=\""
+                                                 (string-append src
+                                                                (string-append "\" id=\""
+                                                                                 (string-append (symbol->string the-exp-id) "\">"))))]
+              [body () ""] ;; body automatically added, this is more to carry background styling
+              )]
           ;; interp-alignment : alignment -> string
           ;; consumes an alignment and returns the css string to print to a .css file
           [define (interp-alignment almt)
@@ -264,9 +240,12 @@
           ;; consumes a list of style expressions and the id of the HTML element these styles refer to
           ;; and returns the corresponding list of css strings to print to a .css file
           [define (interp-styles styles the-exp-id)
-            (append (list (string-append "#" (string-append (symbol->string the-exp-id) " {")))
-                         (map (λ (style-exp) (interp-style style-exp)) styles)
-                         (list (string-append "}\n")))]
+            (local ([define css-id-str (if (equal? the-exp-id 'body)
+                                       (symbol->string the-exp-id)
+                                       (string-append "#" (symbol->string the-exp-id)))])
+              (append (list (string-append css-id-str " {"))
+                      (map (λ (style-exp) (interp-style style-exp)) styles)
+                      (list (string-append "}\n"))))]
 
           ;; interp-style : styling -> string
           ;; consumes a style expression and returns the appropriate css string to print to a .css file
@@ -275,7 +254,10 @@
               [styling-color (c) (string-append "\tcolor: " (string-append c ";"))]
               [styling-font (f) (string-append "\tfont-family: \"" (string-append f "\";"))]
               [styling-size (s) (string-append "\tfont-size: " (string-append s "pt;"))]
-              [styling-alignment (a) (interp-alignment a)])]
+              [styling-alignment (a) (interp-alignment a)]
+              [styling-bg-image (s) (string-append "\tbackground-image: url(\"" (string-append s "\");"))]
+              [styling-bg-color (c) (string-append "\tbackground-color: " (string-append c ";"))]
+              [styling-bg-repeat () (string-append "\tbackground-repeat: repeat;")])]
 
           [define (helper the-exp)
             (local ([define the-exp-id (expr-id the-exp)])
@@ -311,17 +293,6 @@
 (define create-paragraph-test "Create paragraph \"Lorem ipsum. \" color red, font Comic Sans MS, size 12, align center")
 (define create-heading-test "Create heading level 2 \"Heading text \" color blue, font Times New Roman, size 14, align right")
 
-;; Helper tests
-;(test (extract-text-from-create-statement create-paragraph-test) "Lorem ipsum. ")
-;(test (extract-text-from-create-statement create-heading-test) "Heading text ")
-;(test (extract-heading-level-from-create-statement create-heading-test) "2")
-;(test (extract-style create-paragraph-test) "color red, font Comic Sans MS, size 12, align center")
-;(test (extract-style-item "color red") "red")
-;(test (extract-style-item "font comic sans") "comic sans")
-;(test (extract-alignment "align center") (align-center))
-;(test (extract-alignment "align right") (align-right))
-;(test (extract-alignment "align left") (align-left))
-
 ;; Parse tests
 ;; Parse one expression
 (let ([exprs (parse (list create-paragraph-test))])
@@ -336,10 +307,6 @@
     (test (expr-elt (second exprs)) (create-heading "Heading text " "2"))
     (test (expr-styles (first exprs)) (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12") (styling-alignment (align-center))))
     (test (expr-styles (second exprs)) (list (styling-color "blue") (styling-font "Times New Roman") (styling-size "14") (styling-alignment (align-right))))))
-
-;; Parse helper tests
-(test (parse-element create-paragraph-test) (create-paragraph "Lorem ipsum. "))
-(test (parse-style "color red, font Comic Sans MS, size 12") (list (styling-color "red") (styling-font "Comic Sans MS") (styling-size "12")))
 
 ;; Interp tests
 ;; Need to use test/pred and lambdas here since interp results have variable ids 
